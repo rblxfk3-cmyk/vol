@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sistem Broker Sintetik</title>
+    <!-- Versi rasmi TradingView Lightweight Charts terkini -->
     <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
     <script src="/socket.io/socket.io.js"></script>
     <style>
@@ -15,17 +16,14 @@
 </head>
 <body>
     <div class="watermark">Custom Vol 80</div>
-    <div class="status" id="status">0. Skrip bermula...</div>
+    <div class="status" id="status">Memulakan carta...</div>
     <div id="chart"></div>
 
     <script>
-        // Tangkap semua jenis error tersembunyi dan cetak ke skrin
         window.onerror = function(msg, url, line) {
             document.getElementById('status').innerText = "Ralat JS: " + msg + " (Baris " + line + ")";
             return false;
         };
-
-        document.getElementById('status').innerText = "1. Melukis ruang graf...";
 
         const chartProperties = {
             width: window.innerWidth,
@@ -36,37 +34,31 @@
         };
         
         const chart = LightweightCharts.createChart(document.getElementById('chart'), chartProperties);
-        const lineSeries = chart.addLineSeries({ color: '#2962FF', lineWidth: 2 });
-
-        document.getElementById('status').innerText = "2. Menyambung ke server...";
+        
+        // Sokongan dua-dalam-satu: menyokong versi baharu (addSeries) & versi lama (addLineSeries)
+        let lineSeries;
+        if (typeof chart.addSeries === 'function' && LightweightCharts.LineSeries) {
+            lineSeries = chart.addSeries(LightweightCharts.LineSeries, { color: '#2962FF', lineWidth: 2 });
+        } else {
+            lineSeries = chart.addLineSeries({ color: '#2962FF', lineWidth: 2 });
+        }
 
         const socket = io(); 
         const statusDiv = document.getElementById('status');
 
         socket.on('connect', () => {
-            statusDiv.innerText = "3. Berjaya sambung! Menunggu data sejarah...";
-        });
-
-        socket.on('connect_error', (err) => {
-            statusDiv.innerText = "Ralat WebSocket: " + err.message;
+            statusDiv.innerText = "Bersambung ke pelayan...";
         });
 
         socket.on('history', (data) => {
-            try {
-                lineSeries.setData(data);
-                statusDiv.innerText = "4. Graf sedia. Menunggu live tick...";
-            } catch (error) {
-                statusDiv.innerText = "Ralat Graf: " + error.message;
-            }
+            lineSeries.setData(data);
+            chart.timeScale().fitContent(); // Laraskan skrin supaya seluruh garisan muat secara automatik
+            statusDiv.innerText = "Graf sedia. Menerima data masa nyata...";
         });
 
         socket.on('tick', (data) => {
-            try {
-                lineSeries.update(data);
-                statusDiv.innerText = `Live Price: ${data.value.toFixed(2)}`;
-            } catch (error) {
-                // Abaikan ralat kemas kini tick
-            }
+            lineSeries.update(data);
+            statusDiv.innerText = `Harga Semasa: ${data.value.toFixed(2)}`;
         });
 
         window.addEventListener('resize', () => {
