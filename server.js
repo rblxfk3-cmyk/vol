@@ -4,14 +4,17 @@ const { Server } = require('socket.io');
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server);
+
+// Tambah tetapan CORS supaya isyarat tak disekat oleh Render
+const io = new Server(server, {
+    cors: { origin: "*", methods: ["GET", "POST"] }
+});
 
 app.use(express.static('public'));
 
 let currentPrice = 10000.00;
 const volatility = 0.0008;
 let history = [];
-// Mula 100 saat ke belakang
 let currentUnixTime = Math.floor(Date.now() / 1000) - 100;
 
 function generateTick() {
@@ -19,15 +22,12 @@ function generateTick() {
     while(u === 0) u = Math.random();
     while(v === 0) v = Math.random();
     let num = Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
-    
     currentPrice = currentPrice + (currentPrice * volatility * num);
-    // Jadikan 2 tempat perpuluhan sahaja (contoh: 10002.50) supaya graf tak ralat
     return parseFloat(currentPrice.toFixed(2));
 }
 
-// Jana 100 data awal
 for (let i = 0; i < 100; i++) {
-    currentUnixTime++; // Masa wajib +1 secara berurutan
+    currentUnixTime++;
     history.push({ time: currentUnixTime, value: generateTick() });
 }
 
