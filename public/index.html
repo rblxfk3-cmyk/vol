@@ -5,7 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sistem Broker Sintetik</title>
     <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
-    <script src="/socket.io/socket.io.js"></script>
+    <!-- Tukar kepada CDN luar supaya wajib berjaya load -->
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <style>
         body { margin: 0; padding: 0; background-color: #131722; color: white; font-family: sans-serif; overflow: hidden; }
         #chart { width: 100vw; height: 100vh; }
@@ -15,7 +16,6 @@
 </head>
 <body>
     <div class="watermark">Custom Vol 80</div>
-    <!-- Penunjuk status untuk mudahkan kita semak ralat -->
     <div class="status" id="status">1. Menunggu data...</div>
     <div id="chart"></div>
 
@@ -31,11 +31,17 @@
         const chart = LightweightCharts.createChart(document.getElementById('chart'), chartProperties);
         const lineSeries = chart.addLineSeries({ color: '#2962FF', lineWidth: 2 });
 
-        const socket = io();
+        // Paksa sistem cuba kedua-dua cara sambungan WebSocket dan Polling
+        const socket = io({ transports: ['websocket', 'polling'] });
         const statusDiv = document.getElementById('status');
 
         socket.on('connect', () => {
             statusDiv.innerText = "2. Berjaya sambung ke server. Menunggu graf...";
+        });
+
+        // Tangkap isyarat jika berlaku ralat sambungan
+        socket.on('connect_error', (err) => {
+            statusDiv.innerText = "Ralat Sambungan: " + err.message;
         });
 
         socket.on('history', (data) => {
@@ -43,14 +49,13 @@
                 lineSeries.setData(data);
                 statusDiv.innerText = "3. Graf dilukis. Menunggu live tick...";
             } catch (error) {
-                statusDiv.innerText = "Ralat: " + error.message;
+                statusDiv.innerText = "Ralat Graf: " + error.message;
             }
         });
 
         socket.on('tick', (data) => {
             try {
                 lineSeries.update(data);
-                // Status akan bertukar tunjuk harga live setiap saat
                 statusDiv.innerText = `Live Price: ${data.value.toFixed(2)}`;
             } catch (error) {
                 // Abaikan jika ralat
