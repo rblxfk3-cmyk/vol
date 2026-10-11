@@ -5,8 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sistem Broker Sintetik</title>
     <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
-    <!-- Tukar kepada CDN luar supaya wajib berjaya load -->
-    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <script src="/socket.io/socket.io.js"></script>
     <style>
         body { margin: 0; padding: 0; background-color: #131722; color: white; font-family: sans-serif; overflow: hidden; }
         #chart { width: 100vw; height: 100vh; }
@@ -16,10 +15,18 @@
 </head>
 <body>
     <div class="watermark">Custom Vol 80</div>
-    <div class="status" id="status">1. Menunggu data...</div>
+    <div class="status" id="status">0. Skrip bermula...</div>
     <div id="chart"></div>
 
     <script>
+        // Tangkap semua jenis error tersembunyi dan cetak ke skrin
+        window.onerror = function(msg, url, line) {
+            document.getElementById('status').innerText = "Ralat JS: " + msg + " (Baris " + line + ")";
+            return false;
+        };
+
+        document.getElementById('status').innerText = "1. Melukis ruang graf...";
+
         const chartProperties = {
             width: window.innerWidth,
             height: window.innerHeight,
@@ -31,23 +38,23 @@
         const chart = LightweightCharts.createChart(document.getElementById('chart'), chartProperties);
         const lineSeries = chart.addLineSeries({ color: '#2962FF', lineWidth: 2 });
 
-        // Paksa sistem cuba kedua-dua cara sambungan WebSocket dan Polling
-        const socket = io({ transports: ['websocket', 'polling'] });
+        document.getElementById('status').innerText = "2. Menyambung ke server...";
+
+        const socket = io(); 
         const statusDiv = document.getElementById('status');
 
         socket.on('connect', () => {
-            statusDiv.innerText = "2. Berjaya sambung ke server. Menunggu graf...";
+            statusDiv.innerText = "3. Berjaya sambung! Menunggu data sejarah...";
         });
 
-        // Tangkap isyarat jika berlaku ralat sambungan
         socket.on('connect_error', (err) => {
-            statusDiv.innerText = "Ralat Sambungan: " + err.message;
+            statusDiv.innerText = "Ralat WebSocket: " + err.message;
         });
 
         socket.on('history', (data) => {
             try {
                 lineSeries.setData(data);
-                statusDiv.innerText = "3. Graf dilukis. Menunggu live tick...";
+                statusDiv.innerText = "4. Graf sedia. Menunggu live tick...";
             } catch (error) {
                 statusDiv.innerText = "Ralat Graf: " + error.message;
             }
@@ -58,7 +65,7 @@
                 lineSeries.update(data);
                 statusDiv.innerText = `Live Price: ${data.value.toFixed(2)}`;
             } catch (error) {
-                // Abaikan jika ralat
+                // Abaikan ralat kemas kini tick
             }
         });
 
