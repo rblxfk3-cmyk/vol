@@ -12,37 +12,60 @@
         .watermark { position: absolute; top: 20px; left: 20px; z-index: 10; font-size: 24px; font-weight: bold; }
         .status { position: absolute; top: 55px; left: 20px; z-index: 10; font-size: 14px; color: #ffeb3b; }
         
-        /* Gaya CSS untuk Menu Dropdown Tukar Carta */
-        .menu-container {
+        .menu-container { position: absolute; top: 20px; right: 20px; z-index: 10; }
+        select { background-color: #2b2b43; color: #d1d4dc; border: 1px solid #4c525e; padding: 8px 12px; border-radius: 6px; cursor: pointer; }
+        
+        /* Gaya CSS untuk Panel Dagangan */
+        .trading-panel {
             position: absolute;
-            top: 20px;
-            right: 20px;
+            top: 90px;
+            left: 20px;
             z-index: 10;
+            background-color: #1e222d;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #2b2b43;
+            width: 220px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
         }
-        select {
-            background-color: #2b2b43;
-            color: #d1d4dc;
-            border: 1px solid #4c525e;
-            padding: 8px 12px;
-            border-radius: 6px;
-            font-size: 14px;
-            outline: none;
-            cursor: pointer;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-        }
-        select:hover { background-color: #363a45; }
+        .trading-panel h3 { margin: 0 0 10px 0; font-size: 16px; border-bottom: 1px solid #4c525e; padding-bottom: 8px; text-align: center;}
+        .trading-panel p { margin: 8px 0; font-size: 14px; display: flex; justify-content: space-between; }
+        
+        .btn-trade { width: 100%; padding: 10px; margin-top: 10px; border: none; border-radius: 4px; color: white; font-weight: bold; cursor: pointer; font-size: 14px; }
+        .btn-buy { background-color: #26a69a; }
+        .btn-sell { background-color: #ef5350; }
+        .btn-close { background-color: #fdd835; color: black; display: none; }
+        .btn-trade:hover { opacity: 0.8; }
+        
+        .profit { color: #26a69a; }
+        .loss { color: #ef5350; }
     </style>
 </head>
 <body>
     <div class="watermark">Custom Vol 80</div>
     <div class="status" id="status">Memulakan sistem...</div>
     
-    <!-- Butang Dropdown di penjuru kanan -->
     <div class="menu-container">
         <select id="chartType">
             <option value="candle">Candlesticks</option>
             <option value="line">Carta Garisan</option>
         </select>
+    </div>
+
+    <!-- Kotak Panel Dagangan -->
+    <div class="trading-panel">
+        <h3>Akaun Maya</h3>
+        <p><span>Baki:</span> $<span id="balance">10000.00</span></p>
+        <p><span>Ekuiti:</span> $<span id="equity">10000.00</span></p>
+        <p><span>PnL:</span> $<span id="pnl" style="color: gray;">0.00</span></p>
+        
+        <div id="trade-info" style="display:none; font-size: 12px; margin-top:10px; color:#b2b5be;">
+            Posisi: <span id="pos-type"></span> @ <span id="pos-entry"></span>
+        </div>
+
+        <button id="btn-buy" class="btn-trade btn-buy">BUY</button>
+        <button id="btn-sell" class="btn-trade btn-sell">SELL</button>
+        <button id="btn-close" class="btn-trade btn-close">TUTUP POSISI</button>
     </div>
 
     <div id="chart"></div>
@@ -57,45 +80,117 @@
         };
         
         const chart = LightweightCharts.createChart(document.getElementById('chart'), chartProperties);
-        
-        // 1. Sediakan Siri Candlestick (Aktif secara lalai)
         const candleSeries = chart.addSeries(LightweightCharts.CandlestickSeries, {
-            upColor: '#26a69a', downColor: '#ef5350', borderVisible: false,
-            wickUpColor: '#26a69a', wickDownColor: '#ef5350',
-            visible: true 
+            upColor: '#26a69a', downColor: '#ef5350', borderVisible: false, wickUpColor: '#26a69a', wickDownColor: '#ef5350'
         });
-
-        // 2. Sediakan Siri Garisan (Disembunyikan secara lalai)
-        const lineSeries = chart.addSeries(LightweightCharts.LineSeries, { 
-            color: '#2962FF', lineWidth: 2, 
-            visible: false 
-        });
+        const lineSeries = chart.addSeries(LightweightCharts.LineSeries, { color: '#2962FF', lineWidth: 2, visible: false });
 
         const socket = io({ transports: ['websocket', 'polling'] }); 
         const statusDiv = document.getElementById('status');
 
-        socket.on('connect', () => statusDiv.innerText = "Bersambung ke pelayan...");
+        // Variabel Dagangan (Trading Logic)
+        let balance = 10000.00;
+        let livePrice = 0;
+        let position = null; // Contoh struktur: { type: 'buy', entry: 10050.00 }
+        let currentPnL = 0;
 
+        // Elemen HTML Panel
+        const elBalance = document.getElementById('balance');
+        const elEquity = document.getElementById('equity');
+        const elPnl = document.getElementById('pnl');
+        const elTradeInfo = document.getElementById('trade-info');
+        const elPosType = document.getElementById('pos-type');
+        const elPosEntry = document.getElementById('pos-entry');
+        
+        const btnBuy = document.getElementById('btn-buy');
+        const btnSell = document.getElementById('btn-sell');
+        const btnClose = document.getElementById('btn-close');
+
+        // Fungsi Kemas Kini Panel PnL
+        function updatePanel() {
+            if (position) {
+                // Kira PnL
+                if (position.type === 'BUY') {
+                    currentPnL = livePrice - position.entry;
+                } else {
+                    currentPnL = position.entry - livePrice;
+                }
+                
+                let equity = balance + currentPnL;
+                
+                elPnl.innerText = currentPnL.toFixed(2);
+                elEquity.innerText = equity.toFixed(2);
+                
+                // Tukar Warna Hijau/Merah
+                elPnl.className = currentPnL >= 0 ? 'profit' : 'loss';
+                elEquity.className = equity >= balance ? 'profit' : 'loss';
+            } else {
+                elPnl.innerText = "0.00";
+                elPnl.className = "";
+                elEquity.innerText = balance.toFixed(2);
+                elEquity.className = "";
+            }
+            elBalance.innerText = balance.toFixed(2);
+        }
+
+        // Fungsi Buka Posisi
+        function openPosition(type) {
+            if (position) {
+                alert("Anda sudah ada posisi yang aktif!");
+                return;
+            }
+            position = { type: type, entry: livePrice };
+            
+            // Kemas kini UI
+            btnBuy.style.display = 'none';
+            btnSell.style.display = 'none';
+            btnClose.style.display = 'block';
+            
+            elPosType.innerText = type;
+            elPosType.style.color = type === 'BUY' ? '#26a69a' : '#ef5350';
+            elPosEntry.innerText = livePrice.toFixed(2);
+            elTradeInfo.style.display = 'block';
+            
+            updatePanel();
+        }
+
+        // Logik Butang
+        btnBuy.onclick = () => openPosition('BUY');
+        btnSell.onclick = () => openPosition('SELL');
+        
+        btnClose.onclick = () => {
+            if (!position) return;
+            balance = balance + currentPnL; // Masukkan PnL ke baki utama
+            position = null;
+            currentPnL = 0;
+            
+            // Reset UI
+            btnBuy.style.display = 'block';
+            btnSell.style.display = 'block';
+            btnClose.style.display = 'none';
+            elTradeInfo.style.display = 'none';
+            
+            updatePanel();
+        };
+
+        // Penerimaan Data Carta
+        socket.on('connect', () => statusDiv.innerText = "Bersambung ke pelayan...");
         socket.on('history', (data) => {
-            // Suapkan data ke Candlestick
             candleSeries.setData(data);
-            
-            // Suapkan data ke Carta Garisan (Garisan hanya perlukan { time, value })
-            const lineData = data.map(d => ({ time: d.time, value: d.close }));
-            lineSeries.setData(lineData);
-            
+            lineSeries.setData(data.map(d => ({ time: d.time, value: d.close })));
             chart.timeScale().fitContent();
-            statusDiv.innerText = "Graf sedia. Menerima data masa nyata...";
+            statusDiv.innerText = "Sistem sedia.";
         });
 
         socket.on('candle', (data) => {
-            // Kemas kini kedua-dua carta serentak setiap saat
+            livePrice = data.close; // Simpan harga live untuk logik dagangan
+            
             candleSeries.update(data);
             lineSeries.update({ time: data.time, value: data.close });
-            statusDiv.innerText = `Harga Semasa (Close): ${data.close.toFixed(2)}`;
+            
+            updatePanel(); // Kira PnL setiap kali harga berubah
         });
 
-        // Fungsi logik menukar graf apabila menu dropdown ditekan
         document.getElementById('chartType').addEventListener('change', (e) => {
             if (e.target.value === 'candle') {
                 candleSeries.applyOptions({ visible: true });
