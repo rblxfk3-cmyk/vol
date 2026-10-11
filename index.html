@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistem Broker Sintetik</title>
+    <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+        body { margin: 0; padding: 0; background-color: #131722; color: white; font-family: sans-serif; overflow: hidden; }
+        #chart { width: 100vw; height: 100vh; }
+        .watermark { position: absolute; top: 20px; left: 20px; z-index: 10; font-size: 24px; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="watermark">Custom Vol 80</div>
+    <div id="chart"></div>
+
+    <script>
+        const chartProperties = {
+            width: window.innerWidth,
+            height: window.innerHeight,
+            layout: { background: { color: '#131722' }, textColor: '#d1d4dc' },
+            grid: { vertLines: { color: '#1f293d' }, horzLines: { color: '#1f293d' } },
+            timeScale: { timeVisible: true, secondsVisible: true }
+        };
+        
+        const chart = LightweightCharts.createChart(document.getElementById('chart'), chartProperties);
+        const lineSeries = chart.addLineSeries({ color: '#2962FF', lineWidth: 2 });
+
+        const socket = io();
+
+        socket.on('tick', (data) => {
+            lineSeries.update({ time: data.time, value: data.price });
+        });
+
+        window.addEventListener('resize', () => {
+            chart.resize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>
