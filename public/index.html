@@ -10,10 +10,13 @@
         body { margin: 0; padding: 0; background-color: #131722; color: white; font-family: sans-serif; overflow: hidden; }
         #chart { width: 100vw; height: 100vh; }
         .watermark { position: absolute; top: 20px; left: 20px; z-index: 10; font-size: 24px; font-weight: bold; }
+        .status { position: absolute; top: 55px; left: 20px; z-index: 10; font-size: 14px; color: #ffeb3b; }
     </style>
 </head>
 <body>
     <div class="watermark">Custom Vol 80</div>
+    <!-- Penunjuk status untuk mudahkan kita semak ralat -->
+    <div class="status" id="status">1. Menunggu data...</div>
     <div id="chart"></div>
 
     <script>
@@ -29,18 +32,28 @@
         const lineSeries = chart.addLineSeries({ color: '#2962FF', lineWidth: 2 });
 
         const socket = io();
+        const statusDiv = document.getElementById('status');
 
-        // 1. Terima 100 data sejarah dari server dan terus lukis
-        socket.on('history', (data) => {
-            lineSeries.setData(data);
+        socket.on('connect', () => {
+            statusDiv.innerText = "2. Berjaya sambung ke server. Menunggu graf...";
         });
 
-        // 2. Sambung terima data live tick (1 per saat)
-        let lastTime = 0;
+        socket.on('history', (data) => {
+            try {
+                lineSeries.setData(data);
+                statusDiv.innerText = "3. Graf dilukis. Menunggu live tick...";
+            } catch (error) {
+                statusDiv.innerText = "Ralat: " + error.message;
+            }
+        });
+
         socket.on('tick', (data) => {
-            if (data.time > lastTime) { // Mengelakkan ralat masa bertembung
-                lineSeries.update({ time: data.time, value: data.value });
-                lastTime = data.time;
+            try {
+                lineSeries.update(data);
+                // Status akan bertukar tunjuk harga live setiap saat
+                statusDiv.innerText = `Live Price: ${data.value.toFixed(2)}`;
+            } catch (error) {
+                // Abaikan jika ralat
             }
         });
 
