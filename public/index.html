@@ -2,180 +2,226 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sistem Broker Sintetik</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Vol 80 - MT5 Terminal</title>
     <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <style>
-        body { margin: 0; padding: 0; background-color: #131722; color: white; font-family: sans-serif; overflow: hidden; }
-        #chart { width: 100vw; height: 100vh; }
-        .watermark { position: absolute; top: 20px; left: 20px; z-index: 10; font-size: 24px; font-weight: bold; }
-        .status { position: absolute; top: 55px; left: 20px; z-index: 10; font-size: 14px; color: #ffeb3b; }
-        .menu-container { position: absolute; top: 20px; right: 20px; z-index: 10; }
-        select { background-color: #2b2b43; color: #d1d4dc; border: 1px solid #4c525e; padding: 8px 12px; border-radius: 6px; cursor: pointer; }
+        /* Gaya Asas ala MT5 Dark Theme */
+        body { margin: 0; padding: 0; background-color: #000000; color: #ffffff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; overflow: hidden; }
         
-        /* Gaya Panel MT5/Dagangan */
-        .trading-panel { position: absolute; top: 90px; left: 20px; z-index: 10; background-color: #1e222d; padding: 15px; border-radius: 8px; border: 1px solid #2b2b43; width: 220px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
-        .trading-panel h3 { margin: 0 0 10px 0; font-size: 16px; border-bottom: 1px solid #4c525e; padding-bottom: 8px; text-align: center;}
-        .trading-panel p { margin: 8px 0; font-size: 14px; display: flex; justify-content: space-between; }
-        .btn-trade { width: 100%; padding: 10px; margin-top: 10px; border: none; border-radius: 4px; color: white; font-weight: bold; cursor: pointer; font-size: 14px; }
-        .btn-buy { background-color: #26a69a; }
-        .btn-sell { background-color: #ef5350; }
-        .btn-close { background-color: #fdd835; color: black; display: none; }
-        .btn-trade:hover { opacity: 0.8; }
-        .profit { color: #26a69a; }
-        .loss { color: #ef5350; }
+        /* Header Bar Atas */
+        .mt5-header { background-color: #1c1c1d; padding: 10px 15px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #2c2c2e; font-size: 15px; font-weight: bold; }
+        .mt5-header .symbol { color: #ffffff; }
+        .mt5-header .symbol span { font-size: 11px; color: #8e8e93; font-weight: normal; margin-left: 5px; }
+        .mt5-header .balance { color: #0a84ff; }
+
+        /* Ruang Carta */
+        #chart { width: 100vw; height: calc(100vh - 200px); background-color: #000000; }
+        .status { position: absolute; top: 50px; left: 10px; z-index: 10; font-size: 11px; color: #ff9f0a; }
+
+        /* MT5 One-Click Trading Panel */
+        .one-click-panel { background-color: #1c1c1d; padding: 10px; border-top: 1px solid #2c2c2e; border-bottom: 1px solid #2c2c2e; }
+        
+        .lot-control { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; background-color: #2c2c2e; border-radius: 6px; padding: 5px; }
+        .lot-btn { background: transparent; border: none; color: #0a84ff; font-size: 14px; font-weight: bold; width: 40px; cursor: pointer; }
+        .lot-input { width: 80px; background: transparent; border: none; color: white; text-align: center; font-size: 18px; font-weight: bold; outline: none; }
+        
+        .action-row { display: flex; justify-content: space-between; gap: 10px; }
+        .btn-trade { flex: 1; padding: 12px; border: none; border-radius: 6px; color: white; font-size: 16px; font-weight: bold; cursor: pointer; display: flex; flex-direction: column; align-items: center; line-height: 1.2; }
+        .btn-sell { background-color: #ff453a; }
+        .btn-buy { background-color: #0a84ff; }
+        .btn-trade span { font-size: 12px; font-weight: normal; opacity: 0.9; }
+
+        /* Posisi Aktif (Active Trade Tab) */
+        .active-trade { background-color: #1c1c1d; margin: 10px; padding: 15px; border-radius: 8px; display: none; border: 1px solid #2c2c2e; }
+        .trade-header { display: flex; justify-content: space-between; align-items: center; font-size: 16px; font-weight: bold; margin-bottom: 5px; }
+        .trade-details { font-size: 12px; color: #8e8e93; margin-bottom: 12px; }
+        .trade-details span { color: #ffffff; }
+        
+        .profit { color: #0a84ff; } /* Biru MT5 untuk untung */
+        .loss { color: #ff453a; }   /* Merah MT5 untuk rugi */
+        
+        .btn-close { width: 100%; padding: 12px; background-color: #ff9f0a; color: black; border: none; border-radius: 6px; font-size: 15px; font-weight: bold; cursor: pointer; }
+
+        /* Sembunyikan elemen jika posisi aktif */
+        .hide { display: none !important; }
     </style>
 </head>
 <body>
-    <div class="watermark">Custom Vol 80</div>
-    <div class="status" id="status">Memulakan sistem...</div>
     
-    <div class="menu-container">
-        <select id="chartType">
-            <option value="candle">Candlesticks</option>
-            <option value="line">Carta Garisan</option>
-        </select>
+    <!-- Bar Atas -->
+    <div class="mt5-header">
+        <div class="symbol">Custom Vol 80 <span>M1</span></div>
+        <div class="balance">$<span id="balance">...</span></div>
     </div>
+    
+    <div class="status" id="status">Connecting to server...</div>
 
-    <div class="trading-panel">
-        <h3>Akaun Maya</h3>
-        <p><span>Baki:</span> $<span id="balance">10000.00</span></p>
-        <p><span>Ekuiti:</span> $<span id="equity">10000.00</span></p>
-        <p><span>PnL:</span> $<span id="pnl" style="color: gray;">0.00</span></p>
-        
-        <div id="trade-info" style="display:none; font-size: 12px; margin-top:10px; color:#b2b5be;">
-            Posisi: <span id="pos-type"></span> @ <span id="pos-entry"></span>
-        </div>
-
-        <button id="btn-buy" class="btn-trade btn-buy">BUY</button>
-        <button id="btn-sell" class="btn-trade btn-sell">SELL</button>
-        <button id="btn-close" class="btn-trade btn-close">TUTUP POSISI</button>
-    </div>
-
+    <!-- Ruang Carta -->
     <div id="chart"></div>
 
+    <!-- Panel One-Click Trading MT5 -->
+    <div class="one-click-panel" id="trade-panel">
+        <div class="lot-control">
+            <button class="lot-btn" onclick="adjLot(-0.1)">-0.1</button>
+            <button class="lot-btn" onclick="adjLot(-0.01)">-0.01</button>
+            <input type="number" id="lot-input" class="lot-input" value="0.10" step="0.01" readonly>
+            <button class="lot-btn" onclick="adjLot(0.01)">+0.01</button>
+            <button class="lot-btn" onclick="adjLot(0.1)">+0.1</button>
+        </div>
+        <div class="action-row">
+            <button class="btn-trade btn-sell" id="btn-sell">SELL <br><span id="price-sell">...</span></button>
+            <button class="btn-trade btn-buy" id="btn-buy">BUY <br><span id="price-buy">...</span></button>
+        </div>
+    </div>
+
+    <!-- Panel Posisi Aktif -->
+    <div class="active-trade" id="active-trade">
+        <div class="trade-header">
+            <span id="pos-title">Buy 0.10</span>
+            <span id="pos-pnl" class="profit">0.00</span>
+        </div>
+        <div class="trade-details">
+            Vol 80 <span id="pos-entry">10000.00</span> &rarr; <span id="pos-live">10000.00</span>
+        </div>
+        <button class="btn-close" id="btn-close">Close Position</button>
+    </div>
+
     <script>
-        // Penangkap Ralat: Jika ada masalah, ia akan tulis di skrin bukan biarkan skrin gelap
         window.onerror = function(msg, url, line) {
-            document.getElementById('status').innerText = "Ralat: " + msg;
+            document.getElementById('status').innerText = "Error: " + msg;
             return false;
         };
 
+        // Konfigurasi Carta MT5 Style (Latar Belakang Hitam, Grid Gelap)
         const chartProperties = {
             width: window.innerWidth,
-            height: window.innerHeight,
-            layout: { background: { color: '#131722' }, textColor: '#d1d4dc' },
-            grid: { vertLines: { color: '#1f293d' }, horzLines: { color: '#1f293d' } },
+            height: window.innerHeight - 200,
+            layout: { background: { color: '#000000' }, textColor: '#8e8e93' },
+            grid: { vertLines: { color: '#1c1c1d' }, horzLines: { color: '#1c1c1d' } },
             timeScale: { timeVisible: true, secondsVisible: false }
         };
         const chart = LightweightCharts.createChart(document.getElementById('chart'), chartProperties);
-        const candleSeries = chart.addSeries(LightweightCharts.CandlestickSeries, { upColor: '#26a69a', downColor: '#ef5350', borderVisible: false, wickUpColor: '#26a69a', wickDownColor: '#ef5350' });
-        const lineSeries = chart.addSeries(LightweightCharts.LineSeries, { color: '#2962FF', lineWidth: 2, visible: false });
+        const candleSeries = chart.addSeries(LightweightCharts.CandlestickSeries, { 
+            upColor: '#000000', downColor: '#ffffff', // Klasik body
+            borderUpColor: '#0a84ff', borderDownColor: '#ff453a', 
+            wickUpColor: '#0a84ff', wickDownColor: '#ff453a' 
+        });
 
         const socket = io({ transports: ['websocket', 'polling'] }); 
         const statusDiv = document.getElementById('status');
 
-        let balance = 10000.00;
+        // Variabel Sistem Dagangan
+        let balance = 0;
         let livePrice = 0;
         let position = null; 
         let currentPnL = 0;
+        let currentLot = 0.10;
 
+        // Elemen HTML
         const elBalance = document.getElementById('balance');
-        const elEquity = document.getElementById('equity');
-        const elPnl = document.getElementById('pnl');
-        const elTradeInfo = document.getElementById('trade-info');
-        const elPosType = document.getElementById('pos-type');
-        const elPosEntry = document.getElementById('pos-entry');
-        const btnBuy = document.getElementById('btn-buy');
-        const btnSell = document.getElementById('btn-sell');
-        const btnClose = document.getElementById('btn-close');
-
-        function updatePanel() {
-            if (position) {
-                if (position.type === 'BUY') { currentPnL = livePrice - position.entry; } 
-                else { currentPnL = position.entry - livePrice; }
-                
-                let equity = balance + currentPnL;
-                elPnl.innerText = currentPnL.toFixed(2);
-                elEquity.innerText = equity.toFixed(2);
-                elPnl.className = currentPnL >= 0 ? 'profit' : 'loss';
-                elEquity.className = equity >= balance ? 'profit' : 'loss';
-            } else {
-                elPnl.innerText = "0.00";
-                elPnl.className = "";
-                elEquity.innerText = balance.toFixed(2);
-                elEquity.className = "";
-            }
-            elBalance.innerText = balance.toFixed(2);
-        }
-
-        function openPosition(type) {
-            if (position) { alert("Anda sudah ada posisi aktif!"); return; }
-            position = { type: type, entry: livePrice };
-            
-            btnBuy.style.display = 'none';
-            btnSell.style.display = 'none';
-            btnClose.style.display = 'block';
-            elPosType.innerText = type;
-            elPosType.style.color = type === 'BUY' ? '#26a69a' : '#ef5350';
-            elPosEntry.innerText = livePrice.toFixed(2);
-            elTradeInfo.style.display = 'block';
-            updatePanel();
-        }
-
-        btnBuy.onclick = () => openPosition('BUY');
-        btnSell.onclick = () => openPosition('SELL');
+        const elLotInput = document.getElementById('lot-input');
+        const elPriceSell = document.getElementById('price-sell');
+        const elPriceBuy = document.getElementById('price-buy');
         
-        btnClose.onclick = () => {
+        const panelTrade = document.getElementById('trade-panel');
+        const panelActive = document.getElementById('active-trade');
+        const elPosTitle = document.getElementById('pos-title');
+        const elPosPnl = document.getElementById('pos-pnl');
+        const elPosEntry = document.getElementById('pos-entry');
+        const elPosLive = document.getElementById('pos-live');
+
+        // Fungsi Kawalan Lot Size
+        window.adjLot = function(val) {
+            currentLot = parseFloat((currentLot + val).toFixed(2));
+            if (currentLot < 0.01) currentLot = 0.01;
+            if (currentLot > 100.00) currentLot = 100.00;
+            elLotInput.value = currentLot.toFixed(2);
+        };
+
+        // Fungsi Pengiraan PnL berasaskan Lot
+        function updatePnL() {
+            if (!position) return;
+            
+            // Formula asas: (Beza point) x Lot x Multiplier
+            // Untuk Vol 80 ini, kita tetapkan 1 point = $10 per 1.00 lot
+            let pointDiff = position.type === 'BUY' ? (livePrice - position.entry) : (position.entry - livePrice);
+            currentPnL = pointDiff * position.lot * 10; 
+            
+            elPosLive.innerText = livePrice.toFixed(2);
+            elPosPnl.innerText = (currentPnL >= 0 ? '+' : '') + currentPnL.toFixed(2);
+            elPosPnl.className = currentPnL >= 0 ? 'profit' : 'loss';
+            
+            // Papar Ekuiti (Baki + PnL) di atas
+            let equity = balance + currentPnL;
+            elBalance.innerText = equity.toFixed(2);
+            elBalance.className = equity >= balance ? 'profit' : 'loss';
+        }
+
+        // Buka Posisi (Buy/Sell)
+        function openPosition(type) {
+            if (position) return;
+            position = { type: type, entry: livePrice, lot: currentLot };
+            
+            // Tukar UI dari Panel One-Click ke Panel Posisi Aktif
+            panelTrade.classList.add('hide');
+            panelActive.style.display = 'block';
+            
+            elPosTitle.innerText = `${type} ${currentLot.toFixed(2)}`;
+            elPosTitle.className = type === 'BUY' ? 'profit' : 'loss';
+            elPosEntry.innerText = livePrice.toFixed(2);
+            
+            updatePnL();
+        }
+
+        document.getElementById('btn-buy').onclick = () => openPosition('BUY');
+        document.getElementById('btn-sell').onclick = () => openPosition('SELL');
+        
+        // Tutup Posisi
+        document.getElementById('btn-close').onclick = () => {
             if (!position) return;
             balance = balance + currentPnL; 
+            
+            // Kemas kini ke Supabase
+            socket.emit('update_balance', balance);
+            
             position = null;
             currentPnL = 0;
             
-            // Beritahu Supabase baki baharu
-            socket.emit('update_balance', balance);
-            
-            btnBuy.style.display = 'block';
-            btnSell.style.display = 'block';
-            btnClose.style.display = 'none';
-            elTradeInfo.style.display = 'none';
-            updatePanel();
+            // Kembalikan UI
+            panelActive.style.display = 'none';
+            panelTrade.classList.remove('hide');
+            elBalance.innerText = balance.toFixed(2);
+            elBalance.className = 'profit';
         };
 
-        socket.on('connect', () => statusDiv.innerText = "Bersambung ke pelayan...");
+        // Sambungan WebSocket
+        socket.on('connect', () => { statusDiv.innerText = ""; });
         
-        // Terima baki sebenar dari pangkalan data
         socket.on('sync_balance', (dbBalance) => {
             balance = parseFloat(dbBalance);
-            updatePanel();
+            if (!position) elBalance.innerText = balance.toFixed(2);
         });
 
         socket.on('history', (data) => {
             candleSeries.setData(data);
-            lineSeries.setData(data.map(d => ({ time: d.time, value: d.close })));
             chart.timeScale().fitContent();
-            statusDiv.innerText = "Sistem sedia.";
         });
 
         socket.on('candle', (data) => {
             livePrice = data.close; 
             candleSeries.update(data);
-            lineSeries.update({ time: data.time, value: data.close });
-            updatePanel(); 
+            
+            // Kemas kini harga pada butang One-Click
+            elPriceSell.innerText = (livePrice - 0.20).toFixed(2); // Cth: spread tiruan
+            elPriceBuy.innerText = livePrice.toFixed(2);
+            
+            updatePnL(); 
         });
 
-        document.getElementById('chartType').addEventListener('change', (e) => {
-            if (e.target.value === 'candle') {
-                candleSeries.applyOptions({ visible: true });
-                lineSeries.applyOptions({ visible: false });
-            } else {
-                candleSeries.applyOptions({ visible: false });
-                lineSeries.applyOptions({ visible: true });
-            }
-        });
-
-        window.addEventListener('resize', () => chart.resize(window.innerWidth, window.innerHeight));
+        // Responsif saiz skrin
+        window.addEventListener('resize', () => chart.resize(window.innerWidth, window.innerHeight - 200));
     </script>
 </body>
 </html>
